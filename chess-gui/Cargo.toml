@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ggez = "0.9.3"
 leben-chess = { git = "https://github.com/INDA25PlusPlus/leben-chess.git", tag = "0.1.1" }

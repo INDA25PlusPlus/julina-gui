@@ -1,26 +1,71 @@
+// chess library imports
+
+use ggez::winit::event_loop;
 use leben_chess::board::Board;
 use leben_chess::board::board_pos::BoardPosition;
 use leben_chess::board::piece::PlayerColor;
 use leben_chess::chess::{ChessError, ChessGame};
 use leben_chess::moves::{ChessMove, PieceMovement};
 
-fn main() -> Result<(), ChessError> {
-    let mut game = ChessGame::new(Board::default_board());
-    game.do_move(ChessMove {
-        piece_movement: PieceMovement {
-            from: BoardPosition::try_from("d2").unwrap(),
-            to: BoardPosition::try_from("d4").unwrap()
-        },
-        promotion: None,
-    })?;
+// ggez imports
 
-    println!("{}", game.game_status());
-    println!("{}", game.board());
+use ggez::event;
+use ggez::graphics::{self, Color};
+use ggez::{Context, GameResult};
+use ggez::glam::*;
+//use ggez::g
 
-    let bitmap = game.available_moves(BoardPosition::try_from("d7").unwrap());
-    println!("{}", bitmap);
 
-    game.resign()?;
+struct GameState {
+    game: ChessGame,
+    gameover: bool,
 
-    Ok(())
+}
+
+impl GameState { // set up starting position
+    fn new() -> Self {
+
+        GameState {
+            game: ChessGame::new(Board::default_board()),
+            gameover: false,
+        }
+
+    }
+}
+
+// implement eventhandler, which requires update and draw functions
+impl event::EventHandler for GameState {
+
+    fn update(&mut self, _ctx: &mut Context) -> GameResult {
+        Ok(())
+    }
+
+    fn draw(&mut self, ctx: &mut Context) -> Result<(), ggez::GameError> {
+
+        // canvas that renders to the frame
+        let mut canvas = graphics::Canvas::from_frame(
+            ctx,
+            graphics::Color::from([0.0, 0.0, 0.0, 1.0]),
+        );
+
+        canvas.finish(ctx)?;
+
+        Ok(())
+
+        
+    }
+
+
+}
+
+
+fn main() -> GameResult {
+
+    let cb = ggez::ContextBuilder::new("chess", "julina");
+    let (ctx, event_loop) = cb.build()?;
+    let state = GameState::new();
+    event::run(ctx, event_loop, state);
+
+
+
 }

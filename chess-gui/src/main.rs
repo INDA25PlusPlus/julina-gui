@@ -61,7 +61,13 @@ impl event::EventHandler for GameState {
 
 fn main() -> GameResult {
 
-    let cb = ggez::ContextBuilder::new("chess", "julina");
+    let window_setup = ggez::conf::WindowSetup::default().title("Chess");
+    let window_mode = ggez::conf::WindowMode::default()
+        .dimensions(1700.0, 1600.0); // width & height of frame
+
+    let cb = ggez::ContextBuilder::new("chess", "julina")
+        .window_setup(window_setup)
+        .window_mode(window_mode);
     let (ctx, event_loop) = cb.build()?;
     let state = GameState::new();
     event::run(ctx, event_loop, state);

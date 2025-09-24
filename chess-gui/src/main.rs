@@ -11,9 +11,10 @@ use leben_chess::moves::{ChessMove, PieceMovement};
 
 use ggez::winit::event_loop;
 use ggez::{context, event};
-use ggez::graphics::{self, Color, Text, TextFragment};
+use ggez::graphics::{self, Color, Image, DrawParam};
 use ggez::{Context, GameResult};
 use ggez::glam::*;
+use leben_chess::util::U3;
 //use ggez::g
 
 
@@ -42,31 +43,59 @@ impl ChessPiece {
 
 
         match (piece_type, piece_color) {
-            (PieceType::Pawn, PlayerColor::White) => "wp.png",
-            (PieceType::Knight, PlayerColor::White) => "wN.png",
-            (PieceType::Bishop, PlayerColor::White) => "wB.png",
-            (PieceType::Rook, PlayerColor::White) => "wR.png",
-            (PieceType::Queen, PlayerColor::White) => "wQ.png",
-            (PieceType::King, PlayerColor::White) => "wK.png",
-            (PieceType::Pawn, PlayerColor::Black) => "bp.png",
-            (PieceType::Knight, PlayerColor::Black) => "bN.png",
-            (PieceType::Bishop, PlayerColor::Black) => "bB.png",
-            (PieceType::Rook, PlayerColor::Black) => "bR.png",
-            (PieceType::Queen, PlayerColor::Black) => "bQ.png",
-            (PieceType::King, PlayerColor::Black) => "bK.png",
+            (PieceType::Pawn, PlayerColor::White) => "/wp.png",
+            (PieceType::Knight, PlayerColor::White) => "/wN.png",
+            (PieceType::Bishop, PlayerColor::White) => "/wB.png",
+            (PieceType::Rook, PlayerColor::White) => "/wR.png",
+            (PieceType::Queen, PlayerColor::White) => "/wQ.png",
+            (PieceType::King, PlayerColor::White) => "/wK.png",
+            (PieceType::Pawn, PlayerColor::Black) => "/bp.png",
+            (PieceType::Knight, PlayerColor::Black) => "/bN.png",
+            (PieceType::Bishop, PlayerColor::Black) => "/bB.png",
+            (PieceType::Rook, PlayerColor::Black) => "/bR.png",
+            (PieceType::Queen, PlayerColor::Black) => "/bQ.png",
+            (PieceType::King, PlayerColor::Black) => "/bK.png",
 
         }
-
-
     }
 
     fn draw(&self, ctx: &mut Context, canvas: &mut graphics::Canvas, square_size: f32) -> GameResult {
 
-        //TODO: Draw pieces
+        // draw image of piece on square self.position
+
+        let image_path = Some(self.filename()).unwrap();
+        let piece_image = Image::from_path(ctx, image_path)?;
+        
+
+        // calc position of square
+        let (col, row): (u8, u8) = self.position.into();
+
+        let x = col as f32 * square_size;
+        let y = row as f32 * square_size;
+
+        
+        let scale = Vec2::new(square_size / piece_image.width() as f32, square_size / piece_image.height() as f32);
+
+        canvas.draw(&piece_image, DrawParam::default()
+                            .dest(Vec2::new(x,y))
+                            .scale(scale),
+        );
+
         Ok(())
     }
 }
 
+
+fn boardpos_to_guipos(boardpos: BoardPosition) -> BoardPosition { 
+    
+    // on the chessboard, a1 = (0,0) etc., but on the guiboard (0,0) would match square a8
+    // this function provides mapping between LERF-mapping and gui image coordinates
+    
+    let (col, row): (u8, u8) = boardpos.into();
+
+    return BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(7-row).unwrap()};
+
+}
 
 struct ChessBoard {
 
@@ -83,18 +112,26 @@ impl ChessBoard {
 
         // then draw pieces
 
-        if let Some(piece) = Board::get_piece(board, BoardPosition::try_from((1, 1)).unwrap()) {
-            let gui_piece = ChessPiece {
-                piece,
-                color: piece.player,
-                position: BoardPosition::try_from((1, 1)).unwrap(),
-            };
-            gui_piece.draw(ctx, canvas, self.square_size)?;
+        for row in 0..8 {
+
+            for col in 0..8 {
+
+                if let Some(temp_piece) = Board::get_piece(board, BoardPosition::try_from((row, col)).unwrap()) {
+
+                    let guipos = boardpos_to_guipos(BoardPosition::try_from((row, col)).unwrap());
+
+                    let gui_piece = ChessPiece {
+                        piece: temp_piece,
+                        position: guipos,
+                    };
+                    gui_piece.draw(ctx, canvas, self.square_size)?;
+
+                }
+            }
         }
 
 
         Ok(())
-
 
     }
 
@@ -104,14 +141,14 @@ impl ChessBoard {
             ctx,
             graphics::DrawMode::fill(),
             graphics::Rect::new(0.0, 0.0, self.square_size, self.square_size),
-             Color::WHITE,
+             Color::from_rgb(220, 220, 220),
         )?;
 
         let black_square = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::fill(),
             graphics::Rect::new(0.0, 0.0, self.square_size, self.square_size),
-            Color::BLACK,
+            Color::from_rgb(50, 50, 50),
         )?;
 
         // (0,0) is upper left corner, (0, 1400) bottom left, etc.
@@ -228,7 +265,7 @@ fn main() -> GameResult {
     let cb = ggez::ContextBuilder::new("chess", "julina")
         .window_setup(window_setup)
         .window_mode(window_mode)
-        .add_resource_path("./recources");
+        .add_resource_path("./resources");
     let (ctx, event_loop) = cb.build()?;
     let state = GameState::new();
     event::run(ctx, event_loop, state);

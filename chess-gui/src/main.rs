@@ -84,7 +84,7 @@ impl ChessPiece {
 }
 
 
-fn boardpos_to_guipos(boardpos: BoardPosition) -> BoardPosition { 
+fn inverse_boardpos_guipos(boardpos: BoardPosition) -> BoardPosition { 
     
     // on the chessboard, a1 = (0,0) etc., but on the guiboard (0,0) would match square a8
     // this function provides mapping between LERF-mapping and gui image coordinates
@@ -116,7 +116,7 @@ impl ChessBoard {
 
                 if let Some(temp_piece) = Board::get_piece(board, BoardPosition::try_from((row, col)).unwrap()) {
 
-                    let guipos = boardpos_to_guipos(BoardPosition::try_from((row, col)).unwrap());
+                    let guipos = inverse_boardpos_guipos(BoardPosition::try_from((row, col)).unwrap());
 
                     let gui_piece = ChessPiece {
                         piece: temp_piece,
@@ -203,7 +203,7 @@ struct GameState {
     board: ChessBoard,
     gameover: bool,
     selected_square: Option<BoardPosition>,
-    selected_target: Option<BoardPosition>,
+    //selected_target: Option<BoardPosition>,
     highlight: Highlight,
 
 }
@@ -218,7 +218,7 @@ impl GameState { // set up starting position
             },
             gameover: false,
             selected_square: None,
-            selected_target: None,
+            //selected_target: None,
             highlight: Highlight::new(ctx).unwrap(),
         })
 
@@ -229,11 +229,11 @@ impl GameState { // set up starting position
 
 fn calc_square_pos (position: BoardPosition) -> Vec2 { // based on board position (not gui board position)
 
-    let (col, row): (u8, u8) = position.into();
+    let (file, rank): (u8, u8) = position.into();
 
      // calc position of square
-    let x =  row as f32 * SQUARE_SIZE;
-    let y =  col as f32 * SQUARE_SIZE;
+    let x =  file as f32 * SQUARE_SIZE;
+    let y =  rank as f32 * SQUARE_SIZE;
 
     Vec2::new(x, y)
 }
@@ -270,7 +270,8 @@ impl Highlight {
 
             if let Some(mesh) = &self.mesh {
 
-                let squares_pos = calc_square_pos(boardpos);
+                let gui_position = inverse_boardpos_guipos(boardpos);
+                let squares_pos = calc_square_pos(gui_position);
                 canvas.draw(mesh, squares_pos);
 
 
@@ -284,14 +285,7 @@ impl Highlight {
 }
 
 
-fn coordinates_to_boardpos (x: f32, y:f32) -> BoardPosition {
 
-    let row = (x / SQUARE_SIZE).floor() as u8;
-    let col = (y / SQUARE_SIZE).floor() as u8;
-
-    return BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
-
-}
 
 // implement eventhandler, which requires update and draw functions
 impl event::EventHandler for GameState {
@@ -329,19 +323,88 @@ impl event::EventHandler for GameState {
             &mut self,
             _ctx: &mut Context,
             _button: event::MouseButton,
-            _x: f32,
-            _y: f32,
+            _x: f32, // corresponds to column
+            _y: f32, // corresponds to row
         ) -> Result<(), ggez::GameError> {
 
 
         match _button {
             MouseButton::Left => {
 
+                if self.selected_square != None {
+                    println!("{}", self.selected_square.unwrap());
+                }
+    
+
                 // convert (x,y)-coordinates to GuiPosition
-                let boardpos = coordinates_to_boardpos(_x, _y);
-                self.highlight.selected_square = Some(boardpos);
+                let row = (_y / SQUARE_SIZE).floor() as u8;
+                let col = (_x / SQUARE_SIZE).floor() as u8;
+                
+                let gui_position = BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
+                let board_position = inverse_boardpos_guipos(gui_position);
+
+                let rank = board_position.rank.get(); 
+                let file = board_position.file.get();
 
 
+                if self.selected_square == None {
+
+                    // if the square contains a piece with valid moves, select it
+                    // game.available_moves(BoardPosition::try_from((row,col)).unwrap()); returns a bitmap containing all zeroes if there's no available moves.
+
+                    let bitboard = self.game.available_moves(BoardPosition::try_from((file, rank)).unwrap()); // (file, rank)
+                    
+                    if !bitboard.is_all_zeros() {
+
+                        println!("{}", bitboard);
+
+                        self.selected_square = Some(board_position);
+                        self.highlight.selected_square = Some(board_position);
+
+                    }
+                    
+                } else if self.selected_square != None { 
+
+                    println!("here");
+
+                    // now the player clicks the target square, check if the target square is valid
+
+                    let selected = self.selected_square.unwrap();
+                    let selected_rank = selected.rank.get();
+                    let seleceted_file = selected.file.get();
+
+                    let targeted_rank = rank;
+                    let targeted_file = file;
+
+
+
+                    let mv = ChessMove {
+                        piece_movement: PieceMovement {
+                            from: BoardPosition::try_from((seleceted_file, selected_rank)).unwrap(),
+                            to: BoardPosition::try_from((targeted_file, targeted_rank)).unwrap(),
+                        },
+                        promotion: None,
+                    };
+
+                    match self.game.do_move(mv) {
+                        Ok(_) => {
+                            println!("Move executed!");
+                        
+
+                        }
+                        Err(err) => {
+                            println!("Illegal move: {:?}", err);
+
+        
+                        }
+                    }
+
+
+                    self.selected_square = None;
+                    self.highlight.selected_square = None;
+
+                }
+        
                 Ok(())
             }
 

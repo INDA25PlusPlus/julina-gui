@@ -227,7 +227,7 @@ impl GameState { // set up starting position
 }
 
 
-fn calc_square_pos (position: BoardPosition) -> Vec2 {
+fn calc_square_pos (position: BoardPosition) -> Vec2 { // based on board position (not gui board position)
 
     let (col, row): (u8, u8) = position.into();
 
@@ -240,7 +240,7 @@ fn calc_square_pos (position: BoardPosition) -> Vec2 {
 
 struct Highlight {
 
-    selected_gui_square: Option<BoardPosition>,
+    selected_square: Option<BoardPosition>,
     mesh: Option<graphics::Mesh>,
 
 }
@@ -257,7 +257,7 @@ impl Highlight {
         )?;
 
         Ok(Highlight {
-            selected_gui_square: None,
+            selected_square: None,
             mesh: Some(mesh),
         })
     }
@@ -266,11 +266,11 @@ impl Highlight {
     fn draw (&self, canvas: &mut Canvas) -> GameResult{
 
        
-        if let Some(guipos) = self.selected_gui_square {
+        if let Some(boardpos) = self.selected_square {
 
             if let Some(mesh) = &self.mesh {
 
-                let squares_pos = calc_square_pos(guipos);
+                let squares_pos = calc_square_pos(boardpos);
                 canvas.draw(mesh, squares_pos);
 
 
@@ -284,14 +284,12 @@ impl Highlight {
 }
 
 
-fn coordinates_to_guipos (x: f32, y:f32) -> BoardPosition {
+fn coordinates_to_boardpos (x: f32, y:f32) -> BoardPosition {
 
     let row = (x / SQUARE_SIZE).floor() as u8;
     let col = (y / SQUARE_SIZE).floor() as u8;
 
-    let boardpos  = BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
-
-    return boardpos_to_guipos(boardpos)
+    return BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
 
 }
 
@@ -340,8 +338,8 @@ impl event::EventHandler for GameState {
             MouseButton::Left => {
 
                 // convert (x,y)-coordinates to GuiPosition
-                let gui_pos = coordinates_to_guipos(_x, _y);
-                self.highlight.selected_gui_square = Some(gui_pos);
+                let boardpos = coordinates_to_boardpos(_x, _y);
+                self.highlight.selected_square = Some(boardpos);
 
 
                 Ok(())

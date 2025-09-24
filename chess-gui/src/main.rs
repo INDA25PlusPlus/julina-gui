@@ -1,6 +1,6 @@
 // chess library imports
 
-use leben_chess::board::piece::Piece;
+use leben_chess::board::piece::{Piece, PieceType};
 use leben_chess::board::Board;
 use leben_chess::board::board_pos::BoardPosition;
 use leben_chess::board::piece::PlayerColor;
@@ -10,7 +10,7 @@ use leben_chess::moves::{ChessMove, PieceMovement};
 // ggez imports
 
 use ggez::winit::event_loop;
-use ggez::event;
+use ggez::{context, event};
 use ggez::graphics::{self, Color, Text, TextFragment};
 use ggez::{Context, GameResult};
 use ggez::glam::*;
@@ -28,15 +28,41 @@ const HEIGHT: f32 = 1600.0;
 
 struct ChessPiece {
     piece: Piece,
-    color: PlayerColor,
     position: BoardPosition,
 }
 
 
 impl ChessPiece {
 
-    fn draw(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) -> GameResult {
-        // TODO: draw pieces
+
+    fn filename(&self) -> &'static str{
+
+        let piece_type = self.piece.piece_type;
+        let piece_color = self.piece.player;
+
+
+        match (piece_type, piece_color) {
+            (PieceType::Pawn, PlayerColor::White) => "wp.png",
+            (PieceType::Knight, PlayerColor::White) => "wN.png",
+            (PieceType::Bishop, PlayerColor::White) => "wB.png",
+            (PieceType::Rook, PlayerColor::White) => "wR.png",
+            (PieceType::Queen, PlayerColor::White) => "wQ.png",
+            (PieceType::King, PlayerColor::White) => "wK.png",
+            (PieceType::Pawn, PlayerColor::Black) => "bp.png",
+            (PieceType::Knight, PlayerColor::Black) => "bN.png",
+            (PieceType::Bishop, PlayerColor::Black) => "bB.png",
+            (PieceType::Rook, PlayerColor::Black) => "bR.png",
+            (PieceType::Queen, PlayerColor::Black) => "bQ.png",
+            (PieceType::King, PlayerColor::Black) => "bK.png",
+
+        }
+
+
+    }
+
+    fn draw(&self, ctx: &mut Context, canvas: &mut graphics::Canvas, square_size: f32) -> GameResult {
+
+        //TODO: Draw pieces
         Ok(())
     }
 }
@@ -50,7 +76,29 @@ struct ChessBoard {
 
 impl ChessBoard {
 
-    fn draw(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) -> GameResult {
+    fn draw(&self, ctx: &mut Context, canvas: &mut graphics::Canvas, board: &Board) -> GameResult {
+
+        // draw squares
+        self.draw_squares(ctx, canvas)?;
+
+        // then draw pieces
+
+        if let Some(piece) = Board::get_piece(board, BoardPosition::try_from((1, 1)).unwrap()) {
+            let gui_piece = ChessPiece {
+                piece,
+                color: piece.player,
+                position: BoardPosition::try_from((1, 1)).unwrap(),
+            };
+            gui_piece.draw(ctx, canvas, self.square_size)?;
+        }
+
+
+        Ok(())
+
+
+    }
+
+    fn draw_squares(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) -> GameResult {
 
         let white_square = graphics::Mesh::new_rectangle(
             ctx,
@@ -105,7 +153,9 @@ struct GUIMove {
 }
 
 impl GUIMove {
+
     
+
 }
 
 
@@ -155,7 +205,7 @@ impl event::EventHandler for GameState {
         );
 
 
-        self.board.draw(ctx, &mut canvas)?;
+        self.board.draw(ctx, &mut canvas, self.game.board())?;
 
         
         canvas.finish(ctx)?;
@@ -177,7 +227,8 @@ fn main() -> GameResult {
 
     let cb = ggez::ContextBuilder::new("chess", "julina")
         .window_setup(window_setup)
-        .window_mode(window_mode);
+        .window_mode(window_mode)
+        .add_resource_path("./recources");
     let (ctx, event_loop) = cb.build()?;
     let state = GameState::new();
     event::run(ctx, event_loop, state);

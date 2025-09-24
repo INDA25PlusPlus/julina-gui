@@ -1,5 +1,7 @@
 // chess library imports
 
+use ggez::event::MouseButton;
+use ggez::winit::dpi::Position;
 use leben_chess::board::piece::{Piece, PieceType};
 use leben_chess::board::Board;
 use leben_chess::board::board_pos::BoardPosition;
@@ -11,19 +13,16 @@ use leben_chess::moves::{ChessMove, PieceMovement};
 
 use ggez::winit::event_loop;
 use ggez::{context, event};
-use ggez::graphics::{self, Color, Image, DrawParam};
+use ggez::graphics::{self, Canvas, Color, DrawParam, Image, MeshBuilder};
 use ggez::{Context, GameResult};
 use ggez::glam::*;
 use leben_chess::util::U3;
-//use ggez::g
 
 
-// const variables
+// constants
 const WIDTH: f32 = 1600.0;
 const HEIGHT: f32 = 1600.0;
-
-
-
+const SQUARE_SIZE: f32 = WIDTH/8.0;
 
 
 
@@ -40,7 +39,6 @@ impl ChessPiece {
 
         let piece_type = self.piece.piece_type;
         let piece_color = self.piece.player;
-
 
         match (piece_type, piece_color) {
             (PieceType::Pawn, PlayerColor::White) => "/wp.png",
@@ -135,6 +133,9 @@ impl ChessBoard {
 
     }
 
+
+
+
     fn draw_squares(&self, ctx: &mut Context, canvas: &mut graphics::Canvas) -> GameResult {
 
         let white_square = graphics::Mesh::new_rectangle(
@@ -201,23 +202,97 @@ struct GameState {
     game: ChessGame,
     board: ChessBoard,
     gameover: bool,
-    selected_square: Option<BoardPosition>
+    selected_square: Option<BoardPosition>,
+    selected_target: Option<BoardPosition>,
+    highlight: Highlight,
 
 }
 
 impl GameState { // set up starting position
-    fn new() -> Self {
+    fn new(ctx: &mut Context) -> GameResult<Self> {
 
-        GameState {
+        Ok(GameState {
             game: ChessGame::new(Board::default_board()),
             board: ChessBoard { 
                 square_size: (WIDTH / 8.0),
             },
-            selected_square: None,
             gameover: false,
-        }
+            selected_square: None,
+            selected_target: None,
+            highlight: Highlight::new(ctx).unwrap(),
+        })
 
     }
+
+}
+
+
+fn calc_square_pos (position: BoardPosition) -> Vec2 {
+
+    let (col, row): (u8, u8) = position.into();
+
+     // calc position of square
+    let x =  row as f32 * SQUARE_SIZE;
+    let y =  col as f32 * SQUARE_SIZE;
+
+    Vec2::new(x, y)
+}
+
+struct Highlight {
+
+    selected_gui_square: Option<BoardPosition>,
+    mesh: Option<graphics::Mesh>,
+
+}
+
+impl Highlight {
+
+    fn new(ctx: &mut Context) -> GameResult<Self> {
+
+        let mesh = graphics::Mesh::new_rectangle(
+            ctx,
+            graphics::DrawMode::fill(),
+            graphics::Rect::new(0.0, 0.0, SQUARE_SIZE, SQUARE_SIZE),
+            Color::from_rgba(255, 255, 0, 128),
+        )?;
+
+        Ok(Highlight {
+            selected_gui_square: None,
+            mesh: Some(mesh),
+        })
+    }
+
+
+    fn draw (&self, canvas: &mut Canvas) -> GameResult{
+
+       
+        if let Some(guipos) = self.selected_gui_square {
+
+            if let Some(mesh) = &self.mesh {
+
+                let squares_pos = calc_square_pos(guipos);
+                canvas.draw(mesh, squares_pos);
+
+
+            }
+
+        }
+
+        Ok(())
+    }
+
+}
+
+
+fn coordinates_to_guipos (x: f32, y:f32) -> BoardPosition {
+
+    let row = (x / SQUARE_SIZE).floor() as u8;
+    let col = (y / SQUARE_SIZE).floor() as u8;
+
+    let boardpos  = BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
+
+    return boardpos_to_guipos(boardpos)
+
 }
 
 // implement eventhandler, which requires update and draw functions
@@ -235,20 +310,48 @@ impl event::EventHandler for GameState {
 
     fn draw(&mut self, ctx: &mut Context) -> Result<(), ggez::GameError> {
 
-        // canvas that renders to the frame
+         // canvas that renders to the frame
         let mut canvas = graphics::Canvas::from_frame(
             ctx,
             graphics::Color::from([1.0, 0.0, 0.0, 0.0]),
         );
 
+        self.board.draw(ctx, &mut canvas, &self.game.board())?;
 
-        self.board.draw(ctx, &mut canvas, self.game.board())?;
+        self.highlight.draw(&mut canvas)?;
 
-        
         canvas.finish(ctx)?;
 
         Ok(())
+        
+    }
 
+
+    fn mouse_button_down_event( // https://docs.rs/ggez/latest/ggez/event/trait.EventHandler.html#method.mouse_button_down_event
+            &mut self,
+            _ctx: &mut Context,
+            _button: event::MouseButton,
+            _x: f32,
+            _y: f32,
+        ) -> Result<(), ggez::GameError> {
+
+
+        match _button {
+            MouseButton::Left => {
+
+                // convert (x,y)-coordinates to GuiPosition
+                let gui_pos = coordinates_to_guipos(_x, _y);
+                self.highlight.selected_gui_square = Some(gui_pos);
+
+
+                Ok(())
+            }
+
+            _ => {
+                // Other button is clicked, do nothing
+                Ok(())
+            } 
+        }
         
     }
 
@@ -266,8 +369,8 @@ fn main() -> GameResult {
         .window_setup(window_setup)
         .window_mode(window_mode)
         .add_resource_path("./resources");
-    let (ctx, event_loop) = cb.build()?;
-    let state = GameState::new();
+    let (mut ctx, event_loop) = cb.build()?;
+    let state = GameState::new(&mut ctx)?;
     event::run(ctx, event_loop, state);
 
 

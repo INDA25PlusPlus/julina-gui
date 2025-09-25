@@ -389,8 +389,6 @@ impl event::EventHandler for GameState {
                         position: BoardPosition {file: U3::try_from(4).unwrap(), rank: U3::try_from(3).unwrap()}
                     };
 
-                
-
                     let promotion_pieces = [knight, bishop, rook, queen];
 
                     for piece in promotion_pieces {
@@ -549,6 +547,52 @@ impl event::EventHandler for GameState {
                         self.selected_target = None;
                         self.highlight.selected_square = None;
 
+                    } else if self.promotion {
+
+                        let promotion_type = match (rank, row) {
+
+                            (3, 3) => PromotionType::Knight,
+                            (3, 4) => PromotionType::Bishop,
+                            (4, 3) => PromotionType::Rook,
+                            (4, 4) => PromotionType::Queen,
+
+                            _ => {return Ok(())},
+                        };
+
+                        let selected_square = self.selected_square.unwrap();
+                        let selected_rank = selected_square.rank.get();
+                        let seleceted_file = selected_square.file.get();
+
+                        let selected_target = self.selected_target.unwrap();
+                        let targeted_rank = selected_target.rank.get();
+                        let targeted_file = selected_target.file.get();
+
+                        let from = BoardPosition::try_from((seleceted_file, selected_rank)).unwrap();
+                        let to = BoardPosition::try_from((targeted_file, targeted_rank)).unwrap();
+
+                        let mv = ChessMove {
+                            piece_movement: PieceMovement {
+                                from: from,
+                                to: to,
+                            },
+                            promotion: Some(promotion_type),
+                        };
+
+                        match self.game.do_move(mv) {
+                            Ok(_) => {
+                                println!("Move executed!");
+                            }
+                            Err(err) => {
+                                println!("Illegal move: {:?}", err);
+                            }
+                        }
+
+
+
+                        self.selected_square = None;
+                        self.selected_target = None;
+                        self.highlight.selected_square = None;
+                        self.promotion = false;
                     }
 
                 } else {

@@ -1,12 +1,14 @@
 // chess library imports
 
+use std::iter::Skip;
+
 use ggez::event::MouseButton;
 use ggez::winit::dpi::Position;
 use leben_chess::board::piece::{Piece, PieceType};
 use leben_chess::board::Board;
 use leben_chess::board::board_pos::BoardPosition;
 use leben_chess::board::piece::PlayerColor;
-use leben_chess::chess::{ChessError, ChessGame, WinReason};
+use leben_chess::chess::{ChessError, ChessGame, WinReason, GameStatus};
 use leben_chess::moves::{ChessMove, PieceMovement};
 
 // ggez imports
@@ -205,6 +207,7 @@ struct GameState {
     selected_square: Option<BoardPosition>,
     //selected_target: Option<BoardPosition>,
     highlight: Highlight,
+    show_gameover_popup: bool,
 
 }
 
@@ -220,6 +223,7 @@ impl GameState { // set up starting position
             selected_square: None,
             //selected_target: None,
             highlight: Highlight::new(ctx).unwrap(),
+            show_gameover_popup: false,
         })
 
     }
@@ -292,11 +296,21 @@ impl event::EventHandler for GameState {
 
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
 
-        if !self.gameover {
+        match self.game.game_status(){
 
-            // continue updating
+            GameStatus::Win(_,_) => {self.gameover = true;}
+            GameStatus::Draw(_) => {self.gameover = true;}
+
+            _ => {}
 
         }
+
+        if self.gameover {
+            // Game over, give user option to restart the game
+            self.show_gameover_popup = true;
+            return Ok(());
+        }
+
         Ok(())
     }
 
@@ -312,6 +326,25 @@ impl event::EventHandler for GameState {
 
         self.highlight.draw(&mut canvas)?;
 
+
+        if self.show_gameover_popup {
+
+            let overlay = graphics::Mesh::new_rectangle(
+                ctx,
+                graphics::DrawMode::fill(),
+                graphics::Rect::new(0.0,0.0, WIDTH/4.0, HEIGHT/4.0),
+                Color::from_rgba(0, 0, 0, 160),
+            )?;
+            canvas.draw(&overlay, Vec2::new(SQUARE_SIZE*3.0, SQUARE_SIZE*3.0));
+
+            
+
+
+
+
+        }
+
+
         canvas.finish(ctx)?;
 
         Ok(())
@@ -326,6 +359,11 @@ impl event::EventHandler for GameState {
             _x: f32, // corresponds to column
             _y: f32, // corresponds to row
         ) -> Result<(), ggez::GameError> {
+
+
+        if self.show_gameover_popup {
+            return Ok(());
+        }
 
 
         match _button {
@@ -362,10 +400,9 @@ impl event::EventHandler for GameState {
                         self.highlight.selected_square = Some(board_position);
 
                     }
-                    
+
                 } else if self.selected_square != None { 
 
-                    println!("here");
 
                     // now the player clicks the target square, check if the target square is valid
 
@@ -433,6 +470,8 @@ fn main() -> GameResult {
     let (mut ctx, event_loop) = cb.build()?;
     let state = GameState::new(&mut ctx)?;
     event::run(ctx, event_loop, state);
+
+
 
 
 }

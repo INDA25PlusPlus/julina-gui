@@ -7,7 +7,7 @@ use leben_chess::board::Board;
 use leben_chess::board::board_pos::BoardPosition;
 use leben_chess::board::piece::PlayerColor;
 use leben_chess::chess::{ChessError, ChessGame, WinReason, GameStatus};
-use leben_chess::moves::{ChessMove, PieceMovement};
+use leben_chess::moves::{ChessMove, PieceMovement, PromotionType};
 
 // ggez imports
 
@@ -203,9 +203,10 @@ struct GameState {
     board: ChessBoard,
     gameover: bool,
     selected_square: Option<BoardPosition>,
-    //selected_target: Option<BoardPosition>,
+    selected_target: Option<BoardPosition>,
     highlight: Highlight,
     show_gameover_popup: bool,
+    promotion: bool,
 
 }
 
@@ -219,9 +220,10 @@ impl GameState { // set up starting position
             },
             gameover: false,
             selected_square: None,
-            //selected_target: None,
+            selected_target: None,
             highlight: Highlight::new(ctx).unwrap(),
             show_gameover_popup: false,
+            promotion: false,
         })
 
     }
@@ -289,9 +291,7 @@ impl Highlight {
                 let squares_pos = calc_square_pos(gui_position);
                 canvas.draw(mesh, squares_pos);
 
-
             }
-
         }
 
         Ok(())
@@ -357,6 +357,105 @@ impl event::EventHandler for GameState {
 
         }
 
+        if self.promotion {
+
+            let overlay = graphics::Mesh::new_rectangle(
+                ctx,
+                graphics::DrawMode::fill(),
+                graphics::Rect::new(0.0,0.0, WIDTH/4.0, HEIGHT/4.0),
+                Color::from_rgba(0, 100, 0, 160),
+            )?;
+            canvas.draw(&overlay, Vec2::new(SQUARE_SIZE*3.0, SQUARE_SIZE*3.0));
+
+            
+            match self.game.active_player() {
+
+                PlayerColor::White => {
+
+                    let knight = ChessPiece{
+                        piece: Piece{piece_type: PieceType::Knight, player: PlayerColor::White},
+                        position: BoardPosition {file: U3::try_from(3).unwrap(), rank: U3::try_from(4).unwrap()}
+                    };
+                    let bishop = ChessPiece { 
+                        piece: Piece{piece_type: PieceType::Bishop, player: PlayerColor::White},
+                        position: BoardPosition {file: U3::try_from(4).unwrap(), rank: U3::try_from(4).unwrap()}
+                    };
+                    let rook = ChessPiece { 
+                        piece: Piece{piece_type: PieceType::Rook, player: PlayerColor::White},
+                        position: BoardPosition {file: U3::try_from(3).unwrap(), rank: U3::try_from(3).unwrap()}
+                    };
+                    let queen = ChessPiece { 
+                        piece: Piece{piece_type: PieceType::Queen, player: PlayerColor::White},
+                        position: BoardPosition {file: U3::try_from(4).unwrap(), rank: U3::try_from(3).unwrap()}
+                    };
+
+                
+
+                    let promotion_pieces = [knight, bishop, rook, queen];
+
+                    for piece in promotion_pieces {
+
+                        let image_path = Some(piece.filename()).unwrap();
+                        let piece_image = Image::from_path(ctx, image_path)?;
+
+                        let scale = Vec2::new(SQUARE_SIZE / piece_image.width() as f32, SQUARE_SIZE / piece_image.height() as f32);
+
+                        let (col, row): (u8, u8) = piece.position.into();
+                        let x = col as f32 * SQUARE_SIZE;
+                        let y = row as f32 * SQUARE_SIZE;
+        
+                        canvas.draw(&piece_image, DrawParam::default()
+                                    .dest(Vec2::new(x as f32, y as f32))
+                                    .scale(scale));
+                    }
+                }
+                
+                PlayerColor::Black => {
+
+                    let knight = ChessPiece{
+                        piece: Piece{piece_type: PieceType::Knight, player: PlayerColor::Black},
+                        position: BoardPosition {file: U3::try_from(3).unwrap(), rank: U3::try_from(5).unwrap()}
+                    };
+                    let bishop = ChessPiece { 
+                        piece: Piece{piece_type: PieceType::Bishop, player: PlayerColor::Black},
+                        position: BoardPosition {file: U3::try_from(4).unwrap(), rank: U3::try_from(5).unwrap()}
+                    };
+                    let rook = ChessPiece { 
+                        piece: Piece{piece_type: PieceType::Rook, player: PlayerColor::Black},
+                        position: BoardPosition {file: U3::try_from(3).unwrap(), rank: U3::try_from(4).unwrap()}
+                    };
+                    let queen = ChessPiece { 
+                        piece: Piece{piece_type: PieceType::Queen, player: PlayerColor::Black},
+                        position: BoardPosition {file: U3::try_from(4).unwrap(), rank: U3::try_from(4).unwrap()}
+                    };
+
+                
+
+                    let promotion_pieces = [knight, bishop, rook, queen];
+
+                    for piece in promotion_pieces {
+
+                        let image_path = Some(piece.filename()).unwrap();
+                        let piece_image = Image::from_path(ctx, image_path)?;
+
+                        let scale = Vec2::new(SQUARE_SIZE / piece_image.width() as f32, SQUARE_SIZE / piece_image.height() as f32);
+
+                        let (col, row): (u8, u8) = piece.position.into();
+                        let x = col as f32 * SQUARE_SIZE;
+                        let y = row as f32 * SQUARE_SIZE;
+
+                        canvas.draw(&piece_image, DrawParam::default()
+                                    .dest(Vec2::new(x as f32, y as f32))
+                                    .scale(scale));
+                    }
+
+                }
+
+
+            }
+
+        }
+
 
         canvas.finish(ctx)?;
 
@@ -399,15 +498,11 @@ impl event::EventHandler for GameState {
                         
                         if !bitboard.is_all_zeros() {
 
-                            println!("{}", bitboard);
-
                             self.selected_square = Some(board_position);
                             self.highlight.selected_square = Some(board_position);
-
                         }
 
-                    } else if self.selected_square != None { 
-
+                    } else if self.selected_target == None { // normal move
 
                         // now the player clicks the target square, check if the target square is valid
 
@@ -418,12 +513,25 @@ impl event::EventHandler for GameState {
                         let targeted_rank = rank;
                         let targeted_file = file;
 
+                        self.selected_target = Some(board_position);
 
+
+                        let from = BoardPosition::try_from((seleceted_file, selected_rank)).unwrap();
+                        let to = BoardPosition::try_from((targeted_file, targeted_rank)).unwrap();
+
+                        // check if move is promotion
+
+                        let promotion_expected = self.game.expects_promotion_move(from);
+
+                        if promotion_expected {  // they have to pick a promotion piece type first.
+                            self.promotion = true;
+                            return Ok(());
+                        }
 
                         let mv = ChessMove {
                             piece_movement: PieceMovement {
-                                from: BoardPosition::try_from((seleceted_file, selected_rank)).unwrap(),
-                                to: BoardPosition::try_from((targeted_file, targeted_rank)).unwrap(),
+                                from: from,
+                                to: to,
                             },
                             promotion: None,
                         };
@@ -431,18 +539,14 @@ impl event::EventHandler for GameState {
                         match self.game.do_move(mv) {
                             Ok(_) => {
                                 println!("Move executed!");
-                            
-
                             }
                             Err(err) => {
                                 println!("Illegal move: {:?}", err);
-
-            
                             }
                         }
 
-
                         self.selected_square = None;
+                        self.selected_target = None;
                         self.highlight.selected_square = None;
 
                     }
@@ -450,7 +554,6 @@ impl event::EventHandler for GameState {
                 } else {
 
                     // check if they click "restart game"-button
-
                     // convert (x,y)-coordinates to GuiPosition
                     let row = (_y / SQUARE_SIZE).floor() as u8;
                     let col = (_x / SQUARE_SIZE).floor() as u8;
@@ -461,25 +564,17 @@ impl event::EventHandler for GameState {
                     let rank = board_position.rank.get(); 
                     let file = board_position.file.get();
 
-
                     match (rank, file) {
 
                         (3, 3) | (3, 4) | (4, 3) | (4, 4) => {
 
                             self.reset(_ctx)?;
                             return Ok(());
-
                         }
-
-
                         _ => {}
                     }
-
-
-
                 }
 
-        
                 Ok(())
             }
 
@@ -508,8 +603,6 @@ fn main() -> GameResult {
     let (mut ctx, event_loop) = cb.build()?;
     let state = GameState::new(&mut ctx)?;
     event::run(ctx, event_loop, state);
-
-
 
 
 }

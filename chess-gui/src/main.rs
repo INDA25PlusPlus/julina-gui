@@ -1,9 +1,7 @@
 // chess library imports
 
-use std::iter::Skip;
-
 use ggez::event::MouseButton;
-use ggez::winit::dpi::Position;
+//use ggez::winit::dpi::Position;
 use leben_chess::board::piece::{Piece, PieceType};
 use leben_chess::board::Board;
 use leben_chess::board::board_pos::BoardPosition;
@@ -228,6 +226,19 @@ impl GameState { // set up starting position
 
     }
 
+    fn reset(&mut self, ctx: &mut Context) -> GameResult {
+
+        self.game = ChessGame::new(Board::default_board());
+
+        self.selected_square = None;
+        self.highlight.selected_square = None;
+
+        self.gameover = false;
+        self.show_gameover_popup = false;
+
+        Ok(())
+    }
+
 }
 
 
@@ -308,7 +319,6 @@ impl event::EventHandler for GameState {
         if self.gameover {
             // Game over, give user option to restart the game
             self.show_gameover_popup = true;
-            return Ok(());
         }
 
         Ok(())
@@ -333,7 +343,7 @@ impl event::EventHandler for GameState {
                 ctx,
                 graphics::DrawMode::fill(),
                 graphics::Rect::new(0.0,0.0, WIDTH/4.0, HEIGHT/4.0),
-                Color::from_rgba(0, 0, 0, 160),
+                Color::from_rgba(120, 0, 0, 160),
             )?;
             canvas.draw(&overlay, Vec2::new(SQUARE_SIZE*3.0, SQUARE_SIZE*3.0));
 
@@ -341,15 +351,9 @@ impl event::EventHandler for GameState {
 
 
             text.set_scale(32.0);
-            let text_x = SQUARE_SIZE*3.0 / 2.0;
-            let text_y = SQUARE_SIZE*3.0 / 2.0;
+            let text_x = SQUARE_SIZE*3.0 + SQUARE_SIZE/2.0 - (text.measure(ctx).unwrap().y)/2.0;
+            let text_y = SQUARE_SIZE*3.0 + SQUARE_SIZE/2.0;
             canvas.draw(&text, DrawParam::default().dest([text_x, text_y]));
-
-
-            
-
-
-
 
         }
 
@@ -369,87 +373,112 @@ impl event::EventHandler for GameState {
             _y: f32, // corresponds to row
         ) -> Result<(), ggez::GameError> {
 
-
-        if self.show_gameover_popup {
-            return Ok(());
-        }
-
-
         match _button {
             MouseButton::Left => {
 
-                if self.selected_square != None {
-                    println!("{}", self.selected_square.unwrap());
-                }
-    
 
-                // convert (x,y)-coordinates to GuiPosition
-                let row = (_y / SQUARE_SIZE).floor() as u8;
-                let col = (_x / SQUARE_SIZE).floor() as u8;
-                
-                let gui_position = BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
-                let board_position = inverse_boardpos_guipos(gui_position);
+                if !self.show_gameover_popup {
 
-                let rank = board_position.rank.get(); 
-                let file = board_position.file.get();
-
-
-                if self.selected_square == None {
-
-                    // if the square contains a piece with valid moves, select it
-                    // game.available_moves(BoardPosition::try_from((row,col)).unwrap()); returns a bitmap containing all zeroes if there's no available moves.
-
-                    let bitboard = self.game.available_moves(BoardPosition::try_from((file, rank)).unwrap()); // (file, rank)
+                    // convert (x,y)-coordinates to GuiPosition
+                    let row = (_y / SQUARE_SIZE).floor() as u8;
+                    let col = (_x / SQUARE_SIZE).floor() as u8;
                     
-                    if !bitboard.is_all_zeros() {
+                    let gui_position = BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
+                    let board_position = inverse_boardpos_guipos(gui_position);
 
-                        println!("{}", bitboard);
-
-                        self.selected_square = Some(board_position);
-                        self.highlight.selected_square = Some(board_position);
-
-                    }
-
-                } else if self.selected_square != None { 
+                    let rank = board_position.rank.get(); 
+                    let file = board_position.file.get();
 
 
-                    // now the player clicks the target square, check if the target square is valid
+                    if self.selected_square == None {
 
-                    let selected = self.selected_square.unwrap();
-                    let selected_rank = selected.rank.get();
-                    let seleceted_file = selected.file.get();
+                        // if the square contains a piece with valid moves, select it
+                        // game.available_moves(BoardPosition::try_from((row,col)).unwrap()); returns a bitmap containing all zeroes if there's no available moves.
 
-                    let targeted_rank = rank;
-                    let targeted_file = file;
-
-
-
-                    let mv = ChessMove {
-                        piece_movement: PieceMovement {
-                            from: BoardPosition::try_from((seleceted_file, selected_rank)).unwrap(),
-                            to: BoardPosition::try_from((targeted_file, targeted_rank)).unwrap(),
-                        },
-                        promotion: None,
-                    };
-
-                    match self.game.do_move(mv) {
-                        Ok(_) => {
-                            println!("Move executed!");
+                        let bitboard = self.game.available_moves(BoardPosition::try_from((file, rank)).unwrap()); // (file, rank)
                         
+                        if !bitboard.is_all_zeros() {
+
+                            println!("{}", bitboard);
+
+                            self.selected_square = Some(board_position);
+                            self.highlight.selected_square = Some(board_position);
 
                         }
-                        Err(err) => {
-                            println!("Illegal move: {:?}", err);
 
-        
+                    } else if self.selected_square != None { 
+
+
+                        // now the player clicks the target square, check if the target square is valid
+
+                        let selected = self.selected_square.unwrap();
+                        let selected_rank = selected.rank.get();
+                        let seleceted_file = selected.file.get();
+
+                        let targeted_rank = rank;
+                        let targeted_file = file;
+
+
+
+                        let mv = ChessMove {
+                            piece_movement: PieceMovement {
+                                from: BoardPosition::try_from((seleceted_file, selected_rank)).unwrap(),
+                                to: BoardPosition::try_from((targeted_file, targeted_rank)).unwrap(),
+                            },
+                            promotion: None,
+                        };
+
+                        match self.game.do_move(mv) {
+                            Ok(_) => {
+                                println!("Move executed!");
+                            
+
+                            }
+                            Err(err) => {
+                                println!("Illegal move: {:?}", err);
+
+            
+                            }
                         }
+
+
+                        self.selected_square = None;
+                        self.highlight.selected_square = None;
+
+                    }
+
+                } else {
+
+                    // check if they click "restart game"-button
+
+                    // convert (x,y)-coordinates to GuiPosition
+                    let row = (_y / SQUARE_SIZE).floor() as u8;
+                    let col = (_x / SQUARE_SIZE).floor() as u8;
+                    
+                    let gui_position = BoardPosition {file: U3::try_from(col).unwrap(), rank: U3::try_from(row).unwrap()};
+                    let board_position = inverse_boardpos_guipos(gui_position);
+
+                    let rank = board_position.rank.get(); 
+                    let file = board_position.file.get();
+
+
+                    match (rank, file) {
+
+                        (3, 3) | (3, 4) | (4, 3) | (4, 4) => {
+
+                            self.reset(_ctx)?;
+                            return Ok(());
+
+                        }
+
+
+                        _ => {}
                     }
 
 
-                    self.selected_square = None;
-                    self.highlight.selected_square = None;
 
                 }
+
         
                 Ok(())
             }

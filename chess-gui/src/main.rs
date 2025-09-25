@@ -15,7 +15,7 @@ use leben_chess::moves::{ChessMove, PieceMovement};
 
 use ggez::winit::event_loop;
 use ggez::{context, event};
-use ggez::graphics::{self, Canvas, Color, DrawParam, Image, MeshBuilder};
+use ggez::graphics::{self, Canvas, Color, DrawParam, Image, MeshBuilder, Text};
 use ggez::{Context, GameResult};
 use ggez::glam::*;
 use leben_chess::util::U3;
@@ -336,6 +336,15 @@ impl event::EventHandler for GameState {
                 Color::from_rgba(0, 0, 0, 160),
             )?;
             canvas.draw(&overlay, Vec2::new(SQUARE_SIZE*3.0, SQUARE_SIZE*3.0));
+
+            let mut text = graphics::Text::new("Game over!\nClick to restart.");
+
+
+            text.set_scale(32.0);
+            let text_x = SQUARE_SIZE*3.0 / 2.0;
+            let text_y = SQUARE_SIZE*3.0 / 2.0;
+            canvas.draw(&text, DrawParam::default().dest([text_x, text_y]));
+
 
             
 

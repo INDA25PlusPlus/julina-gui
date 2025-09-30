@@ -295,19 +295,20 @@ pub enum Role {
     Client,
 }
 
-struct Peer {
+struct NetworkPlayer {
     stream: TcpStream,
     role: Role,
 }
 
-impl Peer {
+impl NetworkPlayer {
     pub fn auto(addr: &str) -> io::Result<Self> { // auto determine client and server based on connection success
 
         // Try client
         match TcpStream::connect(addr) {
             Ok(stream) => {
                 println!("Connected to {} as CLIENT (White)", addr);
-                return Ok(Peer {stream, role: Role::Client});
+                stream.set_nonblocking(true)?;
+                return Ok(NetworkPlayer {stream, role: Role::Client});
             }
 
             Err(e) => {
@@ -318,9 +319,11 @@ impl Peer {
                 // Start as server
                 let listener = TcpListener::bind(addr)?;
                 println!("Listening on {} as SERVER (Black)", addr);
+                println!("Waiting for client to connect...");
                 let (stream, sock_addr) = listener.accept()?;
                 println!("Client connected from {}", sock_addr);
-                return Ok(Peer {stream, role: Role::Server});
+                stream.set_nonblocking(true)?;
+                return Ok(NetworkPlayer {stream, role: Role::Server});
             }
         }
 
@@ -346,6 +349,9 @@ impl event::EventHandler for GameState {
             // Game over, give user option to restart the game
             self.show_gameover_popup = true;
         }
+
+
+
 
         Ok(())
     }
@@ -665,7 +671,7 @@ const ADDR: &str = "127.0.0.1:8080";
 
 fn main() -> GameResult {
 
-    let mut peer = Peer::auto(ADDR)?;
+    let peer = NetworkPlayer::auto(ADDR)?;
 
     let window_setup = ggez::conf::WindowSetup::default().title("Chess");
     let window_mode = ggez::conf::WindowMode::default()

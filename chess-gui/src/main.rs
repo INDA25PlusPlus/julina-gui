@@ -32,7 +32,7 @@ const SQUARE_SIZE: f32 = WIDTH/8.0;
 
 
 const ADDR: &str = "127.0.0.1:8080";
-const MSG_SIZE: u8 = 128;
+const MSG_SIZE: usize = 128;
 
 
 struct ChessPiece {
@@ -243,8 +243,9 @@ impl GameState { // set up starting position
     }
 
 
-    fn update_board(&mut self, msg: &str) -> GameResult {
+    fn update_board(&mut self, msg: &str) {
         // TODO update board based on move from msg
+       
     }
  
 }
@@ -314,6 +315,7 @@ pub enum Role {
 struct NetworkPlayer {
     stream: TcpStream,
     role: Role,
+    color: PlayerColor,
 }
 
 impl NetworkPlayer {
@@ -324,7 +326,7 @@ impl NetworkPlayer {
             Ok(stream) => {
                 println!("Connected to {} as CLIENT (White)", addr);
                 stream.set_nonblocking(true)?;
-                return Ok(NetworkPlayer {stream, role: Role::Client});
+                return Ok(NetworkPlayer {stream, role: Role::Client, color: PlayerColor::White});
             }
 
             Err(e) => {
@@ -339,28 +341,91 @@ impl NetworkPlayer {
                 let (stream, sock_addr) = listener.accept()?;
                 println!("Client connected from {}", sock_addr);
                 stream.set_nonblocking(true)?;
-                return Ok(NetworkPlayer {stream, role: Role::Server});
+                return Ok(NetworkPlayer {stream, role: Role::Server, color: PlayerColor::Black});
             }
         }
 
     }
 
-    fn read_message() {
+    // fixed size of buffer: 128 bytes
+    // five parts separated by ':'
+    // Message identifier: 9 characters, "ChessMOVE"
+    // Move: 5 characters, eg. A1A50 (capital letters), the last 
+    // character indicating promotion piece type
+    // Game state: "0-0" ongoing, "1-0" white won, "0-1" black won, "1-1" draw
+    // New board: FEN-notation
+    // Padding such that total num of bytes is 128
+
+    fn read_tcp_message(&mut self) -> io::Result<Option<String>> {
+
+        let mut msg_buf = [0; MSG_SIZE];
+
+        match self.stream.read_exact(&mut msg_buf) {
+            Ok(_) => {
+                let msg = String::from_utf8_lossy(&msg_buf).
+                    to_string();
+                return Ok(Some(msg))
+            },
+            Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Ok(None),
+            Err(e) => panic!("IO error: {}", e),
+        }
+
 
     }
 
-    fn write_message() {
-        
-    }
-
-
-    pub fn decode_move(msg: &str) {
+    fn write_tcp_message() {
 
     }
 
-    pub fn encode_move() {
 
+
+}
+
+
+ fn decode_message(msg: &str) -> Result<(&str, &str, &str), &'static str>{
+
+    // if (msg).len() < 128 {
+    //     return Err("Message too short");
+    // }
+
+    let parts: Vec<&str> = msg.trim().split(":").collect();
+
+    println!("{:?}", parts);
+
+    if parts.len() < 4 {
+        return Err("Invalid message format");
     }
+
+    println!("{}", parts[0]);
+
+    if parts[0].to_string() != "ChessMOVE".to_string() {
+        return Err("invalid message ID");
+    }
+
+    Ok((parts[1], parts[2], parts[3]))
+}
+
+fn encode_message() {
+
+}
+
+fn decode_move(chess_move: &str) -> Option<ChessMove> {
+
+
+    let from = BoardPosition::try_from(&chess_move[0..2]).ok()?;
+    let to = BoardPosition::try_from(&chess_move[2..4]).ok()?;
+
+    let promotion = match chess_move.chars().nth(4) {
+
+        Some('K') => Some(PromotionType::Knight),
+        Some('B') => Some(PromotionType::Bishop),
+        Some('R') => Some(PromotionType::Rook),
+        Some('Q') => Some(PromotionType::Queen),
+        Some('0') | None | _ => None,
+    };
+
+    return Some(ChessMove{piece_movement: PieceMovement{from, to}, promotion});
+
 }
 
 
@@ -384,6 +449,50 @@ impl event::EventHandler for GameState {
         }
 
 
+        // If we're waiting for the opponent to make a move (networking)
+
+        if let Some(network_player) = &mut self.network_player {
+            if let Some(msg) = network_player.read_tcp_message()? {
+
+
+                match decode_message(&msg) {
+
+                    Ok((chess_move, game_state, new_board)) => {
+
+                        if game_state != "0-0" {
+                            self.gameover = true;
+                            return Ok(());
+                        } 
+
+                        let decoded_move = decode_move(chess_move).unwrap();
+
+                        // perform move
+                        match self.game.do_move(decoded_move) {
+
+                            Ok(_) => {},
+                            Err(e) => {
+                                println!("Failed to perform opponent's move: {}", e);
+                                // RAGE QUIT
+                                self.gameover = true;
+                                self.network_player = None; // drop connection
+                                return Ok(());
+                            }
+                        }
+
+                        // compare your new board with opponent's new board
+
+            
+                    }
+
+                    Err(e) => {
+                        println!("Error decoding message: {}", e);
+                        return Ok(())
+                    }
+                }
+
+            }
+        }
+       
 
 
         Ok(())
@@ -407,7 +516,7 @@ impl event::EventHandler for GameState {
             let overlay = graphics::Mesh::new_rectangle(
                 ctx,
                 graphics::DrawMode::fill(),
-                graphics::Rect::new(0.0,0.0, WIDTH/3.5, HEIGHT/4.0),
+                graphics::Rect::new(0.0,0.0, WIDTH/4.0, HEIGHT/4.0),
                 Color::from_rgba(120, 0, 0, 160),
             )?;
             canvas.draw(&overlay, Vec2::new(SQUARE_SIZE*3.0, SQUARE_SIZE*3.0));
@@ -538,6 +647,14 @@ impl event::EventHandler for GameState {
 
         match _button {
             MouseButton::Left => {
+
+                if let Some(network_player) = &self.network_player {
+
+                    if network_player.color != self.game.active_player() {
+                        println!("Opponent is to move");
+                        return Ok(());
+                    }
+                }
 
 
                 if !self.show_gameover_popup {

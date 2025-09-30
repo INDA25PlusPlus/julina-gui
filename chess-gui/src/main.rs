@@ -31,6 +31,9 @@ const HEIGHT: f32 = 1600.0;
 const SQUARE_SIZE: f32 = WIDTH/8.0;
 
 
+const ADDR: &str = "127.0.0.1:8080";
+const MSG_SIZE: u8 = 128;
+
 
 struct ChessPiece {
     piece: Piece,
@@ -197,11 +200,18 @@ struct GameState {
     highlight: Highlight,
     show_gameover_popup: bool,
     promotion: bool,
+    network_player: Option<NetworkPlayer>,
 
 }
 
 impl GameState { // set up starting position
-    fn new(ctx: &mut Context) -> GameResult<Self> {
+    fn new(ctx: &mut Context, network_game: bool, addr: &str) -> GameResult<Self> {
+
+        let network_player = if network_game{
+            Some(NetworkPlayer::auto(addr)?)
+        } else {
+            None
+        };
 
         Ok(GameState {
             game: ChessGame::new(Board::default_board()),
@@ -214,6 +224,7 @@ impl GameState { // set up starting position
             highlight: Highlight::new(ctx).unwrap(),
             show_gameover_popup: false,
             promotion: false,
+            network_player,
         })
 
     }
@@ -231,6 +242,11 @@ impl GameState { // set up starting position
         Ok(())
     }
 
+
+    fn update_board(&mut self, msg: &str) -> GameResult {
+        // TODO update board based on move from msg
+    }
+ 
 }
 
 
@@ -326,6 +342,23 @@ impl NetworkPlayer {
                 return Ok(NetworkPlayer {stream, role: Role::Server});
             }
         }
+
+    }
+
+    fn read_message() {
+
+    }
+
+    fn write_message() {
+        
+    }
+
+
+    pub fn decode_move(msg: &str) {
+
+    }
+
+    pub fn encode_move() {
 
     }
 }
@@ -667,11 +700,7 @@ impl event::EventHandler for GameState {
 }
 
 
-const ADDR: &str = "127.0.0.1:8080";
-
 fn main() -> GameResult {
-
-    let peer = NetworkPlayer::auto(ADDR)?;
 
     let window_setup = ggez::conf::WindowSetup::default().title("Chess");
     let window_mode = ggez::conf::WindowMode::default()
@@ -682,7 +711,7 @@ fn main() -> GameResult {
         .window_mode(window_mode)
         .add_resource_path("./resources");
     let (mut ctx, event_loop) = cb.build()?;
-    let state = GameState::new(&mut ctx)?;
+    let state = GameState::new(&mut ctx, true, ADDR)?;
     event::run(ctx, event_loop, state);
 
 

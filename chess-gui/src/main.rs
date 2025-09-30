@@ -11,12 +11,18 @@ use leben_chess::moves::{ChessMove, PieceMovement, PromotionType};
 
 // ggez imports
 
-use ggez::winit::event_loop;
-use ggez::{context, event};
-use ggez::graphics::{self, Canvas, Color, DrawParam, Image, MeshBuilder, Text};
+//use ggez::winit::event_loop;
+use ggez::{event};
+use ggez::graphics::{self, Canvas, Color, DrawParam, Image};
 use ggez::{Context, GameResult};
 use ggez::glam::*;
 use leben_chess::util::U3;
+
+// tcp imports
+
+use std::io;
+use std::io::{Read, Write};
+use std::net::{TcpStream, TcpListener};
 
 
 // constants
@@ -182,22 +188,6 @@ impl ChessBoard {
 }
 
 
-struct GUIMove {
-    piece: Piece,
-    color: PlayerColor,
-    from: BoardPosition,
-    to: BoardPosition,
-    promotion: Option<Piece>,
-}
-
-impl GUIMove {
-
-    
-
-}
-
-
-
 struct GameState {
     game: ChessGame,
     board: ChessBoard,
@@ -300,6 +290,42 @@ impl Highlight {
 }
 
 
+pub enum Role {
+    Server,
+    Client,
+}
+
+struct Peer {
+    stream: TcpStream,
+    role: Role,
+}
+
+impl Peer {
+    pub fn auto(addr: &str) -> io::Result<Self> { // auto determine client and server based on connection success
+
+        // Try client
+        match TcpStream::connect(addr) {
+            Ok(stream) => {
+                println!("Connected to {} as CLIENT (White)", addr);
+                return Ok(Peer {stream, role: Role::Client});
+            }
+
+            Err(e) => {
+                if e.kind() != io::ErrorKind::ConnectionRefused {
+                    return Err(e);
+                }
+
+                // Start as server
+                let listener = TcpListener::bind(addr)?;
+                println!("Listening on {} as SERVER (Black)", addr);
+                let (stream, sock_addr) = listener.accept()?;
+                println!("Client connected from {}", sock_addr);
+                return Ok(Peer {stream, role: Role::Server});
+            }
+        }
+
+    }
+}
 
 
 // implement eventhandler, which requires update and draw functions
@@ -342,12 +368,13 @@ impl event::EventHandler for GameState {
             let overlay = graphics::Mesh::new_rectangle(
                 ctx,
                 graphics::DrawMode::fill(),
-                graphics::Rect::new(0.0,0.0, WIDTH/4.0, HEIGHT/4.0),
+                graphics::Rect::new(0.0,0.0, WIDTH/3.5, HEIGHT/4.0),
                 Color::from_rgba(120, 0, 0, 160),
             )?;
             canvas.draw(&overlay, Vec2::new(SQUARE_SIZE*3.0, SQUARE_SIZE*3.0));
 
-            let mut text = graphics::Text::new("Game over!\nClick to restart.");
+            let msg = format!("Game over!\n{}\nClick to restart.", self.game.game_status());
+            let mut text = graphics::Text::new(msg);
 
 
             text.set_scale(32.0);
@@ -634,7 +661,11 @@ impl event::EventHandler for GameState {
 }
 
 
+const ADDR: &str = "127.0.0.1:8080";
+
 fn main() -> GameResult {
+
+    let mut peer = Peer::auto(ADDR)?;
 
     let window_setup = ggez::conf::WindowSetup::default().title("Chess");
     let window_mode = ggez::conf::WindowMode::default()

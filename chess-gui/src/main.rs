@@ -368,7 +368,13 @@ impl NetworkPlayer {
 
     }
 
-    fn write_tcp_message() {
+    fn write_tcp_message(&mut self, msg: &str) {
+
+        match self.stream.write(msg.as_bytes()) {
+
+            Ok(_) => {println!("Move sent to opponent!")},
+            Err(e) => {println!("Failed to write message: {}", e)}
+        }
 
     }
 
@@ -405,8 +411,8 @@ impl HelperNetworkPlayer {
 
     fn encode_move(mv: ChessMove) -> String {
 
-        let files = b"ABCDEFGH";
-        let ranks = b"12345678";
+        let files = ["A", "B", "C", "D", "E", "F", "G", "H"];
+        let ranks = ["1", "2", "3", "4", "5", "6", "7", "8"];
 
         let move_string: String = format!(
             "{}{}{}{}{}",
@@ -446,8 +452,6 @@ impl HelperNetworkPlayer {
             return Err("Invalid message format");
         }
 
-        println!("{}", parts[0]);
-
         if parts[0].to_string() != "ChessMOVE".to_string() {
             return Err("invalid message ID");
         }
@@ -457,12 +461,12 @@ impl HelperNetworkPlayer {
 
 
 
-    fn encode_message(game_state: &GameState, mv: ChessMove) -> String{  
+    fn encode_message(game: &ChessGame, mv: ChessMove) -> String{  
 
         //let separator = ":";
         //let msg_id = "ChessMOVE";
 
-        let game_status = match game_state.game.game_status() {
+        let game_status = match game.game_status() {
             
             GameStatus::NotYetStarted | GameStatus::Normal => "0-0",
             GameStatus::Win(PlayerColor::White, _) => "1-0",
@@ -472,7 +476,7 @@ impl HelperNetworkPlayer {
 
         let encoded_move = HelperNetworkPlayer::encode_move(mv);
 
-        let fen = "TODO"; // Make FEN string
+        let fen = "FEN_PLACEHOLDER"; // Make FEN string
 
         return format!(
             "ChessMOVE:{}:{}:{}:{}",
@@ -797,7 +801,13 @@ impl event::EventHandler for GameState {
                         self.highlight.selected_square = None;
 
 
-                        let mv_tcp = HelperNetworkPlayer::encode_message(&self, mv);
+                        if let Some(network_player) = &mut self.network_player {
+
+                            let mv_tcp = HelperNetworkPlayer::encode_message(&self.game, mv);
+                            NetworkPlayer::write_tcp_message(network_player, &mv_tcp);
+                        }
+                        
+                        
 
                     } else if self.promotion {
 
@@ -839,12 +849,17 @@ impl event::EventHandler for GameState {
                             }
                         }
 
-
-
                         self.selected_square = None;
                         self.selected_target = None;
                         self.highlight.selected_square = None;
                         self.promotion = false;
+
+                        if let Some(network_player) = &mut self.network_player {
+
+                            let mv_tcp = HelperNetworkPlayer::encode_message(&self.game, mv);
+                            NetworkPlayer::write_tcp_message(network_player, &mv_tcp);
+                        }
+
                     }
 
                 } else {

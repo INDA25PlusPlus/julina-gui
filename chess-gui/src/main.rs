@@ -432,8 +432,49 @@ impl HelperNetworkPlayer {
         return move_string;
     }
 
-    fn board_to_fen() {
+    fn board_to_fen(game: &ChessGame) -> String {
 
+        // FEN-notation, excluding castling, en passant etc. (tracked by chess lib)
+        // code inspo from leben-chess impl Display for Board
+
+        let mut fen_board = String::new();
+
+        let mut empty_squares = 0;
+        for rank in (0..8).rev() { // print eight rank first
+
+            if rank < 7 {
+                if empty_squares != 0 {
+                    fen_board += &empty_squares.to_string();
+                }
+                fen_board += "/";
+            }
+            empty_squares = 0;
+            for file in 0..8 { // print a8, b8, ..., h8 etc.
+
+                let pos = BoardPosition{
+                    file: file.try_into().unwrap(),
+                    rank: rank.try_into().unwrap(),
+                };
+
+                let piece = game.board().get_piece(pos);
+
+                if let Some(piece) = piece {
+                    if empty_squares != 0 {
+                        fen_board += &empty_squares.to_string();
+                        empty_squares = 0;
+                    }
+                    fen_board += piece.get_char();
+
+                } else {
+                    empty_squares += 1;
+                }
+
+            }
+        }
+
+        println!("{}", fen_board);
+
+        return fen_board;
         
     }
 
@@ -476,7 +517,7 @@ impl HelperNetworkPlayer {
 
         let encoded_move = HelperNetworkPlayer::encode_move(mv);
 
-        let fen = "FEN_PLACEHOLDER"; // Make FEN string
+        let fen = HelperNetworkPlayer::board_to_fen(game); // Make FEN string
 
         return format!(
             "ChessMOVE:{}:{}:{}:{}",
@@ -486,7 +527,6 @@ impl HelperNetworkPlayer {
             "0".repeat(MSG_SIZE-9-5-3-fen.len()-4)
         );
     }
-
 
 }
 

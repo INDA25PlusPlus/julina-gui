@@ -581,17 +581,27 @@ impl event::EventHandler for GameState {
 
                             Ok(_) => {},
                             Err(e) => {
-                                println!("Failed to perform opponent's move: {}", e);
                                 // RAGE QUIT
                                 self.gameover = true;
                                 self.network_player = None; // drop connection
+                                println!("Rage Quit! Failed to perform opponent's move: {}", e);
                                 return Ok(());
                             }
                         }
 
                         // compare your new board with opponent's new board
 
-            
+                        let new_board_fen = HelperNetworkPlayer::board_to_fen(&self.game);
+
+                        if new_board_fen != new_board {
+                            // RAGE QUIT
+                            self.gameover = true;
+                            self.network_player = None;
+                            println!("Rage Quit! FEN-board mismatch");
+                            return  Ok(());
+                        }
+
+        
                     }
 
                     Err(e) => {

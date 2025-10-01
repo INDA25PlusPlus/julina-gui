@@ -243,12 +243,10 @@ impl GameState { // set up starting position
     }
 
 
-    fn update_board(&mut self, msg: &str) {
-        // TODO update board based on move from msg
-       
-    }
- 
+
 }
+
+ 
 
 
 fn calc_square_pos (position: BoardPosition) -> Vec2 { // based on board position (not gui board position)
@@ -305,13 +303,10 @@ impl Highlight {
     }
 
 }
-
-
 pub enum Role {
     Server,
     Client,
 }
-
 struct NetworkPlayer {
     stream: TcpStream,
     role: Role,
@@ -382,51 +377,116 @@ impl NetworkPlayer {
 }
 
 
- fn decode_message(msg: &str) -> Result<(&str, &str, &str), &'static str>{
 
-    // if (msg).len() < 128 {
-    //     return Err("Message too short");
-    // }
+struct HelperNetworkPlayer {
+    network_player: NetworkPlayer, 
+    game_state: GameState,
+}
 
-    let parts: Vec<&str> = msg.trim().split(":").collect();
+impl HelperNetworkPlayer {
 
-    println!("{:?}", parts);
+    fn decode_move(chess_move: &str) -> Option<ChessMove> {
 
-    if parts.len() < 4 {
-        return Err("Invalid message format");
+        let from = BoardPosition::try_from(&chess_move[0..2]).ok()?;
+        let to = BoardPosition::try_from(&chess_move[2..4]).ok()?;
+
+        let promotion = match chess_move.chars().nth(4) {
+
+            Some('K') => Some(PromotionType::Knight),
+            Some('B') => Some(PromotionType::Bishop),
+            Some('R') => Some(PromotionType::Rook),
+            Some('Q') => Some(PromotionType::Queen),
+            Some('0') | None | _ => None,
+        };
+
+        return Some(ChessMove{piece_movement: PieceMovement{from, to}, promotion});
+
     }
 
-    println!("{}", parts[0]);
+    fn encode_move(mv: ChessMove) -> String {
 
-    if parts[0].to_string() != "ChessMOVE".to_string() {
-        return Err("invalid message ID");
+        let files = b"ABCDEFGH";
+        let ranks = b"12345678";
+
+        let move_string: String = format!(
+            "{}{}{}{}{}",
+            files[mv.piece_movement.from.file.get() as usize],
+            ranks[mv.piece_movement.from.rank.get() as usize],
+            files[mv.piece_movement.to.file.get() as usize],
+            ranks[mv.piece_movement.to.rank.get() as usize],
+            match mv.promotion {
+                Some(PromotionType::Knight) => "K",
+                Some(PromotionType::Bishop) => "B",
+                Some(PromotionType::Rook) => "R",
+                Some(PromotionType::Queen) => "Q",
+                None => "0",
+            }
+        );
+
+        return move_string;
     }
 
-    Ok((parts[1], parts[2], parts[3]))
+    fn board_to_fen() {
+
+        
+    }
+
+
+     fn decode_message(msg: &str) -> Result<(&str, &str, &str), &'static str>{
+
+        // if (msg).len() < 128 {
+        //     return Err("Message too short");
+        // }
+
+        let parts: Vec<&str> = msg.trim().split(":").collect();
+
+        println!("{:?}", parts);
+
+        if parts.len() < 4 {
+            return Err("Invalid message format");
+        }
+
+        println!("{}", parts[0]);
+
+        if parts[0].to_string() != "ChessMOVE".to_string() {
+            return Err("invalid message ID");
+        }
+
+        Ok((parts[1], parts[2], parts[3]))
+    }
+
+
+
+    fn encode_message(game_state: &GameState, mv: ChessMove) -> String{  
+
+        //let separator = ":";
+        //let msg_id = "ChessMOVE";
+
+        let game_status = match game_state.game.game_status() {
+            
+            GameStatus::NotYetStarted | GameStatus::Normal => "0-0",
+            GameStatus::Win(PlayerColor::White, _) => "1-0",
+            GameStatus::Win(PlayerColor::Black, _) => "0-1",
+            GameStatus::Draw(_) => "1-1",
+        };
+
+        let encoded_move = HelperNetworkPlayer::encode_move(mv);
+
+        let fen = "TODO"; // Make FEN string
+
+        return format!(
+            "ChessMOVE:{}:{}:{}:{}",
+            encoded_move,
+            game_status,
+            fen,
+            "0".repeat(MSG_SIZE-9-5-3-fen.len()-4)
+        );
+    }
+
+
 }
 
-fn encode_message() {
 
-}
-
-fn decode_move(chess_move: &str) -> Option<ChessMove> {
-
-
-    let from = BoardPosition::try_from(&chess_move[0..2]).ok()?;
-    let to = BoardPosition::try_from(&chess_move[2..4]).ok()?;
-
-    let promotion = match chess_move.chars().nth(4) {
-
-        Some('K') => Some(PromotionType::Knight),
-        Some('B') => Some(PromotionType::Bishop),
-        Some('R') => Some(PromotionType::Rook),
-        Some('Q') => Some(PromotionType::Queen),
-        Some('0') | None | _ => None,
-    };
-
-    return Some(ChessMove{piece_movement: PieceMovement{from, to}, promotion});
-
-}
 
 
 // implement eventhandler, which requires update and draw functions
@@ -452,10 +512,16 @@ impl event::EventHandler for GameState {
         // If we're waiting for the opponent to make a move (networking)
 
         if let Some(network_player) = &mut self.network_player {
+
+            // only read their message if it's their turn
+            if network_player.color == self.game.active_player() {
+                return Ok(());
+            }
+
             if let Some(msg) = network_player.read_tcp_message()? {
 
 
-                match decode_message(&msg) {
+                match HelperNetworkPlayer::decode_message(&msg) {
 
                     Ok((chess_move, game_state, new_board)) => {
 
@@ -464,7 +530,7 @@ impl event::EventHandler for GameState {
                             return Ok(());
                         } 
 
-                        let decoded_move = decode_move(chess_move).unwrap();
+                        let decoded_move = HelperNetworkPlayer::decode_move(chess_move).unwrap();
 
                         // perform move
                         match self.game.do_move(decoded_move) {
@@ -729,6 +795,9 @@ impl event::EventHandler for GameState {
                         self.selected_square = None;
                         self.selected_target = None;
                         self.highlight.selected_square = None;
+
+
+                        let mv_tcp = HelperNetworkPlayer::encode_message(&self, mv);
 
                     } else if self.promotion {
 

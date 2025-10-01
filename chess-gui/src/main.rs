@@ -550,6 +550,7 @@ impl event::EventHandler for GameState {
         if self.gameover {
             // Game over, give user option to restart the game
             self.show_gameover_popup = true;
+            return Ok(());
         }
 
 
@@ -568,11 +569,6 @@ impl event::EventHandler for GameState {
                 match HelperNetworkPlayer::decode_message(&msg) {
 
                     Ok((chess_move, game_state, new_board)) => {
-
-                        if game_state != "0-0" {
-                            self.gameover = true;
-                            return Ok(());
-                        } 
 
                         let decoded_move = HelperNetworkPlayer::decode_move(chess_move).unwrap();
 
@@ -600,6 +596,11 @@ impl event::EventHandler for GameState {
                             println!("Rage Quit! FEN-board mismatch");
                             return  Ok(());
                         }
+
+                        if game_state != "0-0" {
+                            self.gameover = true;
+                            return Ok(());
+                        } 
 
         
                     }

@@ -231,6 +231,12 @@ impl GameState { // set up starting position
 
     fn reset(&mut self, ctx: &mut Context) -> GameResult {
 
+        // let network_player = if network_game{
+        //     Some(NetworkPlayer::auto(addr)?)
+        // } else {
+        //     None
+        // };
+
         self.game = ChessGame::new(Board::default_board());
 
         self.selected_square = None;
@@ -238,6 +244,9 @@ impl GameState { // set up starting position
 
         self.gameover = false;
         self.show_gameover_popup = false;
+
+        self.network_player = None;
+
 
         Ok(())
     }
@@ -841,6 +850,14 @@ impl event::EventHandler for GameState {
                         match self.game.do_move(mv) {
                             Ok(_) => {
                                 println!("Move executed!");
+
+                                // only write move if it's legal
+
+                                if let Some(network_player) = &mut self.network_player {
+
+                                    let mv_tcp = HelperNetworkPlayer::encode_message(&self.game, mv);
+                                    NetworkPlayer::write_tcp_message(network_player, &mv_tcp);
+                                }
                             }
                             Err(err) => {
                                 println!("Illegal move: {:?}", err);
@@ -850,13 +867,6 @@ impl event::EventHandler for GameState {
                         self.selected_square = None;
                         self.selected_target = None;
                         self.highlight.selected_square = None;
-
-
-                        if let Some(network_player) = &mut self.network_player {
-
-                            let mv_tcp = HelperNetworkPlayer::encode_message(&self.game, mv);
-                            NetworkPlayer::write_tcp_message(network_player, &mv_tcp);
-                        }
                         
                         
 
@@ -894,6 +904,14 @@ impl event::EventHandler for GameState {
                         match self.game.do_move(mv) {
                             Ok(_) => {
                                 println!("Move executed!");
+
+                                // only write move if it's valid
+
+                                if let Some(network_player) = &mut self.network_player {
+
+                                    let mv_tcp = HelperNetworkPlayer::encode_message(&self.game, mv);
+                                    NetworkPlayer::write_tcp_message(network_player, &mv_tcp);
+                                }
                             }
                             Err(err) => {
                                 println!("Illegal move: {:?}", err);
@@ -904,12 +922,6 @@ impl event::EventHandler for GameState {
                         self.selected_target = None;
                         self.highlight.selected_square = None;
                         self.promotion = false;
-
-                        if let Some(network_player) = &mut self.network_player {
-
-                            let mv_tcp = HelperNetworkPlayer::encode_message(&self.game, mv);
-                            NetworkPlayer::write_tcp_message(network_player, &mv_tcp);
-                        }
 
                     }
 
